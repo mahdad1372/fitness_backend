@@ -1,0 +1,25 @@
+app = "fitness-spring"
+primary_region = "fra"
+
+[env]
+# Force Spring to listen on all interfaces so Fly-proxy can find it
+SERVER_ADDRESS = "0.0.0.0"
+SERVER_PORT = "7000"
+
+# Database connection string
+SPRING_DATASOURCE_URL = "jdbc:oracle:thin:@/pbm64ri086nk9bvt_high?TNS_ADMIN=/app/wallet"
+SPRING_DATASOURCE_USERNAME = "ADMIN"
+
+[build]
+
+[http_service]
+internal_port = 7000
+force_https = true
+auto_stop_machines = true
+auto_start_machines = true
+min_machines_running = 1
+
+[[vm]]
+memory = "1gb"
+cpus = 1
+memory_mb = 1024
