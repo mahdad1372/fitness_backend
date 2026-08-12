@@ -43,7 +43,24 @@ public class User implements UserDetails {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Date updatedAt;
+    @Column(name = "blood_pressure_data_source", length = 512)
+    private String bloodPressureDataSource;
+    @Column(name = "heart_rate_data_source", length = 512)
+    private String heart_Rate_Data_Source;
+    public String getHeartRateDataSource() {
+        return heart_Rate_Data_Source;
+    }
 
+    public void setHeartRateDataSource(String heartRateDataSource) {
+        this.heart_Rate_Data_Source = heartRateDataSource;
+    }
+    public String getBloodPressureDataSource() {
+        return bloodPressureDataSource;
+    }
+
+    public void setBloodPressureDataSource(String bloodPressureDataSource) {
+        this.bloodPressureDataSource = bloodPressureDataSource;
+    }
     public String getFirstname() {
         return firstname;
     }
@@ -144,5 +161,6 @@ public class User implements UserDetails {
     public void setAge(Integer age) {
         this.age = age;
     }
+
 }
 

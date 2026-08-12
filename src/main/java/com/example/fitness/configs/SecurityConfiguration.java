@@ -74,8 +74,11 @@ public class SecurityConfiguration {
                         "/users/about",
                         "/users/login",
                         "/users",
+                        "/users/**",
                         "/google-fit/heart-rate",
+                        "/google-fit/blood-pressure",
                         "/google-fit/**",
+                        "/google-fit/blood-pressure/datasource/**",
                         "/users/bmi/**",
                         "/health_metric/**",
                         "/foods/**",
@@ -126,6 +129,7 @@ public class SecurityConfiguration {
                 "GET",
                 "POST",
                 "PUT",
+                "PATCH",
                 "DELETE",
                 "OPTIONS"
         ));

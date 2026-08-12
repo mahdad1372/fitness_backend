@@ -1,109 +1,107 @@
 package com.example.fitness.controllers;
 
+import com.example.fitness.repositories.UserRepository;
+import com.example.fitness.services.GoogleFitAuthService;
+import com.example.fitness.services.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+
+import com.example.fitness.entitties.User;
 
 @RestController
 @RequestMapping("/google-fit")
 public class GoogleFitController {
+    private final UserService userService;
+    // These are now REFRESH tokens (long-lived), not access tokens.
+    @Value("${BLOOD_PRESSURE_REFRESH_TOKEN}")
+    private String bloodPressureRefreshToken;
+    @Value("${BLOOD_PRESSURE_REFRESH_TOKEN_WRITE}")
+    private String bloodPressureRefreshTokenWrite;
+    @Value("${HEART_RATE_REFRESH_TOKEN}")
+    private String heartRateRefreshToken;
+    @Value("${HEART_RATE_REFRESH_TOKEN_WRITE}")
+    private String heartRateRefreshTokenWrite;
 
-    @Value("${BLOOD_PRESSURE_TOKEN}")
-    private String BLOOD_PRESSURE_TOKEN;
-    @Value("${HEART_RATE_TOKEN}")
-    private String HEART_RATE_TOKEN;
-    private float calculateAverageHeartRate(JsonNode root) {
-        JsonNode points = root.path("point");
+    private final GoogleFitAuthService googleFitAuthService;
 
-        if (!points.isArray() || points.isEmpty()) {
-            return 0;
-        }
-
-        float sum = 0;
-        int count = 0;
-
-        for (JsonNode point : points) {
-            JsonNode valueArray = point.path("value");
-
-            if (valueArray.isArray() && !valueArray.isEmpty()) {
-                float bpm = (float) valueArray.get(0).path("fpVal").asDouble();
-                sum += bpm;
-                count++;
-            }
-        }
-
-        return (count == 0) ? 0 : sum / count;
+    public GoogleFitController(GoogleFitAuthService googleFitAuthService,UserService userService) {
+        this.googleFitAuthService = googleFitAuthService;
+        this.userService= userService;
     }
 
-    // ---------------- Endpoint ----------------
-    @GetMapping("/heart-rate")
-    public ResponseEntity<Map<String, Object>> getHeartRateAverage() {
+    // ---------------- Heart rate ----------------
+    @GetMapping("/heart-rate/{userId}")
+    public ResponseEntity<Object> getHeartRateAverage(@PathVariable("userId") Integer userId) {
+
+        List<User> users = userService.finduserbyid(userId);
+        if (users == null || users.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "No user with id " + userId));
+        }
+        User user = users.get(0);
+
+        String dataSourceId = user.getHeartRateDataSource();
+        if (dataSourceId == null) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
+                    .body(Map.of("error", "This user has no heart rate data source yet.",
+                            "createUrl", "/google-fit/heart-rate/datasource/" + userId));
+        }
+
+        // Same fixed window the PATCH endpoint writes into, so reads and writes line up.
+        String startNanos = "1731110400000000000";
+        String endNanos = "1731196800000000000";
+        String datasetId = startNanos + "-" + endNanos;
+
         RestTemplate restTemplate = new RestTemplate();
-        String dataSourceId = "derived:com.google.heart_rate.bpm:com.google.android.gms:merge_heart_rate_bpm";
-        String datasetId = "1731110400000000000-1731196800000000000";
+
         try {
-            // 2. Build URI (Handles encoding for the colons in dataSourceId)
+            String accessToken = googleFitAuthService.getValidAccessToken(heartRateRefreshToken);
+
             URI uri = UriComponentsBuilder
                     .fromHttpUrl("https://www.googleapis.com/fitness/v1/users/me/dataSources/{dataSourceId}/datasets/{datasetId}")
                     .buildAndExpand(dataSourceId, datasetId)
                     .toUri();
 
-            // 3. Prepare Headers
             HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(HEART_RATE_TOKEN);
+            headers.setBearerAuth(accessToken);
             HttpEntity<String> entity = new HttpEntity<>(headers);
 
-            // 4. Request data from Google
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
             Map<String, Object> body = response.getBody();
 
-            // 5. Logic to calculate average
-            if (body != null && body.containsKey("point")) {
-                List<Map<String, Object>> points = (List<Map<String, Object>>) body.get("point");
-
-                double average = points.stream()
-                        // Get the 'value' array inside each point
-                        .flatMap(p -> ((List<Map<String, Object>>) p.get("value")).stream())
-                        // Extract the 'fpVal'
-                        .mapToDouble(v -> {
-                            Object val = v.get("fpVal");
-                            // Jackson may parse 72 as Integer and 72.5 as Double
-                            return (val instanceof Integer) ? ((Integer) val).doubleValue() : (Double) val;
-                        })
-                        .average()
-                        .orElse(0.0);
-
-                // 6. Return the result
-                return ResponseEntity.ok(Map.of(
-                        "average_bpm", Math.round(average * 100.0) / 100.0,
-                        "data_points_analyzed", points.size(),
-                        "status", "success"
-                ));
+            if (body == null || !body.containsKey("point")) {
+                return ResponseEntity.ok(Map.of("userId", userId, "message", "No data found."));
             }
 
-            return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+            List<Map<String, Object>> points = (List<Map<String, Object>>) body.get("point");
+
+            double averageBpm = points.stream()
+                    .map(p -> (List<Map<String, Object>>) p.get("value"))
+                    .mapToDouble(v -> Double.parseDouble(v.get(0).get("fpVal").toString()))
+                    .average().orElse(0.0);
+
+            return ResponseEntity.ok(Map.of(
+                    "userId", userId,
+                    "averageBpm", Math.round(averageBpm * 10.0) / 10.0,
+                    "unit", "bpm",
+                    "pointsCount", points.size()
+            ));
 
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
         }
     }
 
-    // Get nutrition like the calories,fat,protein,carbs
-    // --- Nutrition endpoint ---
     @GetMapping("/nutrition")
     public ResponseEntity<?> getNutrition(@RequestHeader("Authorization") String authorizationHeader) {
-
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("Authorization header missing or invalid. Use 'Bearer <access_token>'.");
@@ -116,9 +114,7 @@ public class GoogleFitController {
                         "raw:com.google.nutrition:428801282059:my-nutrition-source/" +
                         "datasets/1731110400000000000-1731196800000000000";
 
-        URI uri = UriComponentsBuilder.fromHttpUrl(googleFitUrl)
-                .build(true)
-                .toUri();
+        URI uri = UriComponentsBuilder.fromHttpUrl(googleFitUrl).build(true).toUri();
 
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = new HttpHeaders();
@@ -128,7 +124,6 @@ public class GoogleFitController {
         ResponseEntity<String> response =
                 restTemplate.exchange(uri, HttpMethod.GET, entity, String.class);
 
-        // ---- Extract calories from JSON ----
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode root = mapper.readTree(response.getBody());
@@ -140,8 +135,6 @@ public class GoogleFitController {
 
             JsonNode valueArray = points.get(0).path("value");
             float calories = 0;
-
-            // value[0] contains mapVal (nutrients)
             JsonNode nutrients = valueArray.get(0).path("mapVal");
 
             for (JsonNode item : nutrients) {
@@ -158,12 +151,66 @@ public class GoogleFitController {
                     .body("Error parsing Google Fit response: " + e.getMessage());
         }
     }
+    // ---------------- Create a blood pressure data source for one user ----------------
+    @PatchMapping("/heart-rate/{userId}")
+    public ResponseEntity<Object> writeHeartRate(@PathVariable("userId") Integer userId,
+                                                 @RequestBody Map<String, Object> request) {
 
-    @GetMapping("/blood-pressure")
-    public ResponseEntity<Object> getBloodPressureAverage() {
-        RestTemplate restTemplate = new RestTemplate();
-        String dataSourceId = "raw:com.google.blood_pressure:407408718192:MyCompany:BP_Device_001:bp-device-001-unique:My BP Device";
-        String datasetId = "1574159699023000000-1574159699023000000";
+        List<User> users = userService.finduserbyid(userId);
+        if (users == null || users.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "No user with id " + userId));
+        }
+        User user = users.get(0);
+
+        String dataSourceId = user.getHeartRateDataSource();
+        if (dataSourceId == null) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
+                    .body(Map.of("error", "This user has no heart rate data source yet.",
+                            "createUrl", "/google-fit/heart-rate/datasource/" + userId));
+        }
+
+        Object bpmRaw = request.get("bpm");
+        if (bpmRaw == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "'bpm' is required in the request body."));
+        }
+        double bpm = Double.parseDouble(bpmRaw.toString());
+
+        String accessToken;
+        try {
+            accessToken = googleFitAuthService.getValidAccessToken(heartRateRefreshTokenWrite);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Could not get a Google Fit access token: " + e.getMessage()));
+        }
+
+        // Same fixed window as blood pressure, so everything stays consistent.
+        String startNanos = "1731110400000000000";
+        String endNanos = "1731196800000000000";
+        String datasetId = startNanos + "-" + endNanos;
+
+        Map<String, Object> point = Map.of(
+                "startTimeNanos", endNanos,
+                "endTimeNanos", endNanos,
+                "dataTypeName", "com.google.heart_rate.bpm",
+                "value", List.of(
+                        Map.of("fpVal", bpm)
+                )
+        );
+
+        Map<String, Object> body = Map.of(
+                "dataSourceId", dataSourceId,
+                "minStartTimeNs", startNanos,
+                "maxEndTimeNs", endNanos,
+                "point", List.of(point)
+        );
+
+        RestTemplate restTemplate = new RestTemplate(
+                new org.springframework.http.client.HttpComponentsClientHttpRequestFactory());
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
 
         try {
             URI uri = UriComponentsBuilder
@@ -171,20 +218,277 @@ public class GoogleFitController {
                     .buildAndExpand(dataSourceId, datasetId)
                     .toUri();
 
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.PATCH, entity, Map.class);
+
+            return ResponseEntity.ok(Map.of(
+                    "userId", userId,
+                    "bpm", bpm,
+                    "status", "written"
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Google Fit rejected the write request: " + e.getMessage()));
+        }
+    }
+    @PatchMapping("/blood-pressure/{userId}")
+    public ResponseEntity<Object> writeBloodPressure(@PathVariable("userId") Integer userId,
+                                                     @RequestBody Map<String, Object> request) {
+
+        List<User> users = userService.finduserbyid(userId);
+        if (users == null || users.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "No user with id " + userId));
+        }
+        User user = users.get(0);
+
+        String dataSourceId = user.getBloodPressureDataSource();
+        if (dataSourceId == null) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
+                    .body(Map.of("error", "This user has no blood pressure data source yet.",
+                            "createUrl", "/google-fit/blood-pressure/datasource/" + userId));
+        }
+
+        Object systolicRaw = request.get("systolic");
+        Object diastolicRaw = request.get("diastolic");
+        if (systolicRaw == null || diastolicRaw == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Both 'systolic' and 'diastolic' are required in the request body."));
+        }
+        double systolic = Double.parseDouble(systolicRaw.toString());
+        double diastolic = Double.parseDouble(diastolicRaw.toString());
+        int bodyPosition = request.get("bodyPosition") != null ? Integer.parseInt(request.get("bodyPosition").toString()) : 0;
+        int measurementLocation = request.get("measurementLocation") != null ? Integer.parseInt(request.get("measurementLocation").toString()) : 0;
+
+        String accessToken;
+        try {
+            accessToken = googleFitAuthService.getValidAccessToken(bloodPressureRefreshTokenWrite);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Could not get a Google Fit access token: " + e.getMessage()));
+        }
+
+        // Fixed time window instead of "now".
+        String startNanos = "1731110400000000000";
+        String endNanos = "1731196800000000000";
+        String datasetId = startNanos + "-" + endNanos;
+
+        Map<String, Object> point = Map.of(
+                "startTimeNanos", endNanos,
+                "endTimeNanos", endNanos,
+                "dataTypeName", "com.google.blood_pressure",
+                "value", List.of(
+                        Map.of("fpVal", systolic),
+                        Map.of("fpVal", diastolic),
+                        Map.of("intVal", bodyPosition),
+                        Map.of("intVal", measurementLocation)
+                )
+        );
+
+        Map<String, Object> body = Map.of(
+                "dataSourceId", dataSourceId,
+                "minStartTimeNs", startNanos,
+                "maxEndTimeNs", endNanos,
+                "point", List.of(point)
+        );
+
+        RestTemplate restTemplate = new RestTemplate(
+                new org.springframework.http.client.HttpComponentsClientHttpRequestFactory());
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            URI uri = UriComponentsBuilder
+                    .fromHttpUrl("https://www.googleapis.com/fitness/v1/users/me/dataSources/{dataSourceId}/datasets/{datasetId}")
+                    .buildAndExpand(dataSourceId, datasetId)
+                    .toUri();
+
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.PATCH, entity, Map.class);
+
+            return ResponseEntity.ok(Map.of(
+                    "userId", userId,
+                    "systolic", systolic,
+                    "diastolic", diastolic,
+                    "status", "written"
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Google Fit rejected the write request: " + e.getMessage()));
+        }
+    }
+    @PostMapping("/heart-rate/datasource/{userId}")
+    public ResponseEntity<Object> createHeartRateDataSource(@PathVariable("userId") Integer userId) {
+
+        String accessToken;
+        try {
+            accessToken = googleFitAuthService.getValidAccessToken(heartRateRefreshTokenWrite);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Could not get a Google Fit access token: " + e.getMessage()));
+        }
+
+        String uniqueDeviceUid = "hr-device-user-" + userId;
+        String streamName = "HR_User_" + userId;
+        String expectedDataStreamId = "raw:com.google.heart_rate.bpm:220955582509:MyCompany:HR_Device:"
+                + uniqueDeviceUid + ":" + streamName;
+
+        Map<String, Object> body = Map.of(
+                "dataStreamName", streamName,
+                "type", "raw",
+                "application", Map.of("name", "Fitness App", "version", "1"),
+                "dataType", Map.of("name", "com.google.heart_rate.bpm"),
+                "device", Map.of(
+                        "manufacturer", "MyCompany",
+                        "model", "HR_Device",
+                        "type", "watch",
+                        "uid", uniqueDeviceUid,
+                        "version", "1.0"
+                )
+        );
+
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+        String dataStreamId;
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    "https://www.googleapis.com/fitness/v1/users/me/dataSources",
+                    HttpMethod.POST, entity, Map.class);
+
+            Map<String, Object> responseBody = response.getBody();
+            dataStreamId = responseBody != null ? (String) responseBody.get("dataStreamId") : null;
+
+            if (dataStreamId == null) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "Google did not return a dataStreamId", "response", responseBody));
+            }
+
+        } catch (org.springframework.web.client.HttpClientErrorException.Conflict e) {
+            dataStreamId = expectedDataStreamId;
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Google Fit rejected the create-dataSource request: " + e.getMessage()));
+        }
+        userService.update_datastreamheartrate(userId, dataStreamId);
+        return ResponseEntity.ok(Map.of("userId", userId, "dataSourceId", dataStreamId, "status", "created"));
+    }
+    @PostMapping("/blood-pressure/datasource/{userId}")
+    public ResponseEntity<Object> createBloodPressureDataSource(@PathVariable("userId") Integer userId) {
+
+        String accessToken;
+        try {
+            accessToken = googleFitAuthService.getValidAccessToken(bloodPressureRefreshTokenWrite);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Could not get a Google Fit access token: " + e.getMessage()));
+        }
+
+        String uniqueDeviceUid = "bp-device-user-" + userId;
+        String streamName = "BP_User_" + userId;
+        // Same shape Google builds server-side: type:dataType:projectNumber:manufacturer:model:uid:streamName
+        String expectedDataStreamId = "raw:com.google.blood_pressure:220955582509:MyCompany:BP_Device:"
+                + uniqueDeviceUid + ":" + streamName;
+
+        Map<String, Object> body = Map.of(
+                "dataStreamName", streamName,
+                "type", "raw",
+                "application", Map.of("name", "Fitness App", "version", "1"),
+                "dataType", Map.of("name", "com.google.blood_pressure"),
+                "device", Map.of(
+                        "manufacturer", "MyCompany",
+                        "model", "BP_Device",
+                        "type", "scale",
+                        "uid", uniqueDeviceUid,
+                        "version", "1.0"
+                )
+        );
+
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+        String dataStreamId;
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    "https://www.googleapis.com/fitness/v1/users/me/dataSources",
+                    HttpMethod.POST, entity, Map.class);
+
+            Map<String, Object> responseBody = response.getBody();
+            dataStreamId = responseBody != null ? (String) responseBody.get("dataStreamId") : null;
+
+            if (dataStreamId == null) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "Google did not return a dataStreamId", "response", responseBody));
+            }
+
+        } catch (org.springframework.web.client.HttpClientErrorException.Conflict e) {
+            dataStreamId = expectedDataStreamId;
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Google Fit rejected the create-dataSource request: " + e.getMessage()));
+        }
+
+        userService.update_datastream(userId, dataStreamId);
+
+        return ResponseEntity.ok(Map.of(
+                "userId", userId,
+                "dataSourceId", dataStreamId,
+                "status", "created"
+        ));
+    }
+    @GetMapping("/blood-pressure/{userId}")
+    public ResponseEntity<Object> getBloodPressureAverage(@PathVariable("userId") Integer userId) {
+
+        List<User> users = userService.finduserbyid(userId);
+        if (users == null || users.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "No user with id " + userId));
+        }
+        User user = users.get(0);
+
+        String dataSourceId = user.getBloodPressureDataSource();
+        if (dataSourceId == null) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
+                    .body(Map.of("error", "This user has no blood pressure data source yet.",
+                            "createUrl", "/google-fit/blood-pressure/datasource/" + userId));
+        }
+
+        // Same fixed window the PATCH endpoint writes into, so reads and writes line up.
+        String startNanos = "1731110400000000000";
+        String endNanos = "1731196800000000000";
+        String datasetId = startNanos + "-" + endNanos;
+
+        RestTemplate restTemplate = new RestTemplate();
+
+        try {
+            String accessToken = googleFitAuthService.getValidAccessToken(bloodPressureRefreshToken);
+
+            URI uri = UriComponentsBuilder
+                    .fromHttpUrl("https://www.googleapis.com/fitness/v1/users/me/dataSources/{dataSourceId}/datasets/{datasetId}")
+                    .buildAndExpand(dataSourceId, datasetId)
+                    .toUri();
+
             HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(BLOOD_PRESSURE_TOKEN);
+            headers.setBearerAuth(accessToken);
             HttpEntity<String> entity = new HttpEntity<>(headers);
 
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
             Map<String, Object> body = response.getBody();
 
             if (body == null || !body.containsKey("point")) {
-                return ResponseEntity.ok("No data found.");
+                return ResponseEntity.ok(Map.of("userId", userId, "message", "No data found."));
             }
 
             List<Map<String, Object>> points = (List<Map<String, Object>>) body.get("point");
 
-            // Extract Systolic (Index 0) and Diastolic (Index 1) from each point
             double avgSystolic = points.stream()
                     .map(p -> (List<Map<String, Object>>) p.get("value"))
                     .mapToDouble(v -> Double.parseDouble(v.get(0).get("fpVal").toString()))
@@ -196,6 +500,7 @@ public class GoogleFitController {
                     .average().orElse(0.0);
 
             return ResponseEntity.ok(Map.of(
+                    "userId", userId,
                     "averageSystolic", Math.round(avgSystolic * 10.0) / 10.0,
                     "averageDiastolic", Math.round(avgDiastolic * 10.0) / 10.0,
                     "unit", "mmHg",

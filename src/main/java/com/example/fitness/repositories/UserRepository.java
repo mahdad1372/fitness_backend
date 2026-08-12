@@ -28,5 +28,13 @@ public interface UserRepository extends CrudRepository<User, Integer> {
             nativeQuery = true)
     void addUser(String email,String firstname,String gender,Float height
     ,String lastname,String password,Float weight,String role,Integer age,Integer smoke);
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE Users SET blood_pressure_data_source = ?2 WHERE user_id = ?1", nativeQuery = true)
+    void updateBloodPressureDataSourceId(Integer userId, String dataSourceId);
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE Users SET heart_Rate_Data_Source = ?2 WHERE user_id = ?1", nativeQuery = true)
+    void updateHeartRateDataSource(Integer userId, String dataSourceId);
 
 }

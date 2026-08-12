@@ -44,4 +44,10 @@ public class UserService {
     public void deleteuserbyId(Integer id){
         userRepository.deleteUsersById(id);
     }
+    public void update_datastream(Integer id, String datastream){
+        userRepository.updateBloodPressureDataSourceId(id,datastream);
+    }
+    public void update_datastreamheartrate(Integer id, String datastream){
+        userRepository.updateHeartRateDataSource(id,datastream);
+    }
 }

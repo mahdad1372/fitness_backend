@@ -19,9 +19,7 @@ public class Health_metricsService {
         this.health_metricsRepository = health_metricsRepository;
     }
     public void addHealth_metrics(Integer user_id, Float cholesterol, Float blood_pressure, Float heart_rate) {
-
         health_metricsRepository.addHealth_metrics(user_id, cholesterol, blood_pressure, heart_rate);
-
     }
     public void deleteHealthById(Integer id){
         health_metricsRepository.deleteHealth_metricsByhealth_id(id);
@@ -118,11 +116,3 @@ public class Health_metricsService {
         return health_metricsRepository.getallHealthMetrics();
     }
 }
-//Integer smoke = userservice.finduserbyid(id).get(0).getSmoke();
-//Integer age = userservice.finduserbyid(id).get(0).getAge();
-//String gender = userservice.finduserbyid(id).get(0).getGender();
-//Float cholesterol = health_metricsService.finduserbyid(id).get(0).getCholesterol();
-//Float blood_pressure = health_metricsService.finduserbyid(id).get(0).getBlood_pressure();
-//Float heart_rate = health_metricsService.finduserbyid(id).get(0).getHeart_rate();
-//Double cardiovascular = health_metricsService.cardiovascular(age,blood_pressure,cholesterol,gender,heart_rate,true);
-//        return cardiovascular;
