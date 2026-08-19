@@ -45,7 +45,6 @@ public class WaitingRoomController {
     public ResponseEntity<List<WaitingRoom>> getWaitingRoomsByChatroomId(
             @PathVariable("id") Integer id
     ) {
-        System.out.println("hello boy");
         return ResponseEntity.ok(
                 waitingRoomService.getWaitingRoomsByChatroomId(id)
         );
