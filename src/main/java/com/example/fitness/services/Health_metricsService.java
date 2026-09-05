@@ -1,6 +1,4 @@
 package com.example.fitness.services;
-import com.example.fitness.dto.CardiovascularDTO;
-import com.example.fitness.dto.CardiovascularResponse;
 import com.example.fitness.entitties.Goals;
 import com.example.fitness.entitties.Health_metrics;
 import com.example.fitness.entitties.User;
@@ -18,15 +16,15 @@ public class Health_metricsService {
     public Health_metricsService(Health_metricsRepository health_metricsRepository) {
         this.health_metricsRepository = health_metricsRepository;
     }
-    public void addHealth_metrics(Integer user_id, Float cholesterol, Float blood_pressure, Float heart_rate) {
-        health_metricsRepository.addHealth_metrics(user_id, cholesterol, blood_pressure, heart_rate);
+    public void addHealth_metrics(Integer user_id, Float cholesterol, Float body_temperature, Float spo2) {
+        health_metricsRepository.addHealth_metrics(user_id, cholesterol, body_temperature, spo2);
     }
     public void deleteHealthById(Integer id){
         health_metricsRepository.deleteHealth_metricsByhealth_id(id);
     }
-    public void updateHealth_metrics(Integer healthmetric_id, Float cholesterol, Float blood_pressure, Float heart_rate)
+    public void updateHealth_metrics(Integer healthmetric_id, Float cholesterol, Float body_temperature, Float spo2)
     {
-        health_metricsRepository.Healthmetric_update(healthmetric_id, cholesterol, blood_pressure, heart_rate
+        health_metricsRepository.Healthmetric_update(healthmetric_id, cholesterol, body_temperature, spo2
         );
     }
     public List<Health_metrics> finduserbyid(Integer id) {
@@ -94,22 +92,6 @@ public class Health_metricsService {
             return "High risk";
         } else {
             return "Very high risk";
-        }
-    }
-    public CardiovascularResponse cardiovascular(Integer id) {
-        List<CardiovascularDTO> cardiovascular = health_metricsRepository.cardiovascular(id);
-
-        if (!cardiovascular.isEmpty()) {
-            CardiovascularDTO dto = cardiovascular.get(0);  // get first item
-            Double cardio = cardiovascular(dto.getAge(), dto.getBloodPressure(),
-                    dto.getCholesterol(), dto.getGender(),
-                    dto.getHeartRate(), dto.getSmoke());
-
-            String status = estimateHeartAttackRisk(cardio); // example logic
-            return new CardiovascularResponse(cardio, status);
-
-        } else {
-            return new CardiovascularResponse(0.0, "no data");
         }
     }
     public List<Health_metrics> fetchAll(){

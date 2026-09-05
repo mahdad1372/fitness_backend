@@ -17,9 +17,9 @@ public class Health_metrics {
     @Column(nullable = false)
     private Float cholesterol;
     @Column(nullable = false)
-    private Float blood_pressure;
+    private Float body_temperature;
     @Column(nullable = false)
-    private Float heart_rate;
+    private Float spo2;
     @CreationTimestamp
     @Column(updatable = false, name = "created_at")
     private Date createdAt;
@@ -36,17 +36,17 @@ public class Health_metrics {
     public void setCholesterol(Float cholesterol) {
         this.cholesterol = cholesterol;
     }
-    public Float getBlood_pressure() {
-        return blood_pressure;
+    public Float getBody_temperature() {
+        return body_temperature;
     }
-    public void setBlood_pressure(Float blood_pressure) {
-        this.blood_pressure = blood_pressure;
+    public void setBody_temperature(Float body_temperature) {
+        this.body_temperature = body_temperature;
     }
-    public Float getHeart_rate() {
-        return heart_rate;
+    public Float getSpo2() {
+        return spo2;
     }
-    public void setHeart_rate(Float heart_rate) {
-        this.heart_rate = heart_rate;
+    public void setSpo2(Float spo2) {
+        this.spo2 = spo2;
     }
     public Date getCreatedAt() {
         return createdAt;

@@ -22,6 +22,7 @@ public class RecommendationService {
     private final FoodsRepository foodRepository;
     private final DailyactivityRepository dailyActivityRepository;
     private final Health_metricsRepository healthMetricRepository;
+    private final GoogleFitDataService googleFitDataService;
     @Cacheable(value = "recommendations", key = "#userId")
     public String getRecommendationsForUser(Integer userId) {
         User user = userRepository.findById(userId)
@@ -40,7 +41,24 @@ public class RecommendationService {
         List<Health_metrics> metrics = healthMetricRepository
                 .findByUserAndDate(userId, sevenDaysAgo);
 
-        String prompt = buildPrompt(user, workouts, foods, activities, metrics);
+        // Heart rate / blood pressure now come live from Google Fit instead
+        // of the Health_metrics table (same source as the cardiovascular
+        // risk calculation). Fall back to 0 if the user hasn't connected a
+        // data source yet, or Google Fit has no data for the window.
+        double heartRate = 0;
+        try {
+            heartRate = googleFitDataService.getHeartRateAverage(user);
+        } catch (Exception e) {
+            System.out.println("Could not get heart rate from Google Fit for user " + userId + ": " + e.getMessage());
+        }
+        double bloodPressure = 0;
+        try {
+            bloodPressure = googleFitDataService.getBloodPressureAverage(user);
+        } catch (Exception e) {
+            System.out.println("Could not get blood pressure from Google Fit for user " + userId + ": " + e.getMessage());
+        }
+
+        String prompt = buildPrompt(user, workouts, foods, activities, metrics, heartRate, bloodPressure);
         return geminiService.getRecommendation(prompt);
     }
     @CacheEvict(value = "recommendations", key = "#userId")
@@ -51,7 +69,9 @@ public class RecommendationService {
                                List<Workouts> workouts,
                                List<Foods> foods,
                                List<Daily_activities> activities,
-                               List<Health_metrics> metrics) {
+                               List<Health_metrics> metrics,
+                               double heartRate,
+                               double bloodPressure) {
         System.out.println("Your workouts is " + workouts);
         System.out.println("Your food is " + foods);
         System.out.println("Your Daily activity is " + activities);
@@ -77,12 +97,8 @@ public class RecommendationService {
         System.out.println("Your Daily carbohydrates is " + avgCarbs);
         System.out.println("Your Daily fats is " + avgFats);
         // Health metric averages
-        OptionalDouble avgHeartRate = metrics.stream()
-                .mapToDouble(h -> h.getHeart_rate()).average();
         OptionalDouble avgCholesterol = metrics.stream()
                 .mapToDouble(Health_metrics::getCholesterol).average();
-        OptionalDouble avgBloodPressure = metrics.stream()
-                .mapToDouble(h -> h.getBlood_pressure()).average();
 
         String latestMood = activities.isEmpty() ? "unknown" :
                 activities.get(activities.size() - 1).getMood();
@@ -110,10 +126,10 @@ public class RecommendationService {
             - Carbohydrates: %.1f g
             - Fats: %.1f g
 
-            HEALTH METRICS (7-day averages):
-            - Heart rate: %.0f bpm
-            - Cholesterol: %.1f
-            - Blood pressure: %.1f
+            HEALTH METRICS:
+            - Heart rate (from Google Fit): %.0f bpm
+            - Cholesterol (7-day average): %.1f
+            - Blood pressure (from Google Fit): %.1f
 
             Please give personalized recommendations in these areas:
             1. Workout plan
@@ -130,8 +146,8 @@ public class RecommendationService {
                 avgCaloriesBurned.orElse(0), workouts.size(), latestMood,
                 avgCaloriesEaten.orElse(0), avgProtein.orElse(0),
                 avgCarbs.orElse(0), avgFats.orElse(0),
-                avgHeartRate.orElse(0), avgCholesterol.orElse(0),
-                avgBloodPressure.orElse(0)
+                heartRate, avgCholesterol.orElse(0),
+                bloodPressure
         );
     }
 }
