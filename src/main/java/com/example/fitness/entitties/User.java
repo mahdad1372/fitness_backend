@@ -47,6 +47,10 @@ public class User implements UserDetails {
     private String bloodPressureDataSource;
     @Column(name = "heart_rate_data_source", length = 512)
     private String heart_Rate_Data_Source;
+    @Column(name = "is_diabetic", nullable = false)
+    private Integer isDiabetic = 0;
+    @Column(name = "on_bp_medication", nullable = false)
+    private Integer onBpMedication = 0;
     public String getHeartRateDataSource() {
         return heart_Rate_Data_Source;
     }
@@ -162,5 +166,18 @@ public class User implements UserDetails {
         this.age = age;
     }
 
+
+    public Integer getIsDiabetic() {
+        return isDiabetic;
+    }
+    public void setIsDiabetic(Integer isDiabetic) {
+        this.isDiabetic = isDiabetic;
+    }
+    public Integer getOnBpMedication() {
+        return onBpMedication;
+    }
+    public void setOnBpMedication(Integer onBpMedication) {
+        this.onBpMedication = onBpMedication;
+    }
 }
 

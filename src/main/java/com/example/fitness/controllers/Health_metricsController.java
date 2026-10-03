@@ -1,12 +1,12 @@
 package com.example.fitness.controllers;
+import com.example.fitness.dto.CardiovascularAssessmentRequestDto;
+import com.example.fitness.dto.CardiovascularAssessmentResponseDto;
 import com.example.fitness.dto.CardiovascularResponse;
 import com.example.fitness.entitties.Goals;
 import com.example.fitness.entitties.Health_metrics;
+import com.example.fitness.services.CardiovascularRiskService;
 import com.example.fitness.entitties.User;
-import com.example.fitness.services.Complexlogic;
-import com.example.fitness.services.GoogleFitDataService;
-import com.example.fitness.services.Health_metricsService;
-import com.example.fitness.services.UserService;
+import com.example.fitness.services.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,16 +22,30 @@ public class Health_metricsController {
     private final Complexlogic complexlogic;
     private final UserService userservice;
     private final GoogleFitDataService googleFitDataService;
-    public Health_metricsController(Health_metricsService health_metricsService, Complexlogic complexlogic,UserService userservice, GoogleFitDataService googleFitDataService) {
+    private final CardiovascularRiskService cardiovascularRiskService;
+    public Health_metricsController(Health_metricsService health_metricsService, Complexlogic complexlogic, UserService userservice, GoogleFitDataService googleFitDataService, CardiovascularRiskService cardiovascularRiskService) {
         this.health_metricsService = health_metricsService;
         this.complexlogic = complexlogic;
         this.userservice = userservice;
         this.googleFitDataService = googleFitDataService;
+        this.cardiovascularRiskService = cardiovascularRiskService;
     }
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/all")
     public ResponseEntity<List<Health_metrics>> allUsers() {
         return ResponseEntity.ok(health_metricsService.fetchAll());
+    }
+    @PostMapping("/cardiovascular/{id}")
+    public ResponseEntity<Object> getcardiovascular(@PathVariable("id") Integer id,
+                                                    @RequestBody CardiovascularAssessmentRequestDto request) {
+        try {
+            CardiovascularAssessmentResponseDto response = cardiovascularRiskService.assess(id, request);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED).body(Map.of("error", e.getMessage()));
+        }
     }
     @PostMapping("/addmetrics")
     public void addhealth_metrics(@RequestBody Health_metrics health_metrics){

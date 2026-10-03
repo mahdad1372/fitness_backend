@@ -27,6 +27,9 @@ public class Health_metricsService {
         health_metricsRepository.Healthmetric_update(healthmetric_id, cholesterol, body_temperature, spo2
         );
     }
+    public void updateHdlCholesterol(Integer healthMetricsId, Float hdlCholesterolMgDl) {
+        health_metricsRepository.updateHdlCholesterol(healthMetricsId, hdlCholesterolMgDl);
+    }
     public List<Health_metrics> finduserbyid(Integer id) {
         List<Health_metrics> health_metrics = new ArrayList<>();
         health_metricsRepository.findByUser_id(id).forEach(health_metrics::add);

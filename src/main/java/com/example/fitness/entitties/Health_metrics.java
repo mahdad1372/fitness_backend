@@ -23,7 +23,15 @@ public class Health_metrics {
     @CreationTimestamp
     @Column(updatable = false, name = "created_at")
     private Date createdAt;
+    @Column(name = "hdl_cholesterol")
+    private Float hdl_cholesterol;
 
+    public Float getHdl_cholesterol() {
+        return hdl_cholesterol;
+    }
+    public void setHdl_cholesterol(Float hdl_cholesterol) {
+        this.hdl_cholesterol = hdl_cholesterol;
+    }
     public Integer getUser_id() {
         return user_id;
     }

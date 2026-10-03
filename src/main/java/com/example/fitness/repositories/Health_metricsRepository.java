@@ -36,6 +36,10 @@ public interface Health_metricsRepository extends CrudRepository<Health_metrics,
     void Healthmetric_update(
             Integer id, Float cholesterol, Float body_temperature, Float spo2
     );
+    @Transactional
+    @Modifying
+    @Query(value = "UPDATE Health_metrics SET hdl_cholesterol = ?2 WHERE id = ?1", nativeQuery = true)
+    void updateHdlCholesterol(Integer id, Float hdlCholesterol);
     @Query(value="SELECT * FROM Health_metrics a WHERE a.id=?1", nativeQuery=true)
     public List<Health_metrics> findBy_id(Integer id);
     @Query(
