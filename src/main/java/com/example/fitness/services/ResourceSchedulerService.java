@@ -13,15 +13,6 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Orchestrates one optimization pass: loads every currently PENDING
- * SessionRequest plus every Equipment type's capacity, converts them into
- * the graph package's plain ResourceScheduler.SessionRequest records
- * (start/end as minutes-since-epoch ints, since the algorithm itself has
- * no JPA/Spring dependency - same separation of concerns as MealPlanner and
- * MacroCalculator), runs the exact Branch & Bound search, then writes the
- * ACCEPTED/REJECTED verdict back onto each entity in one batch.
- */
 @Service
 @RequiredArgsConstructor
 public class ResourceSchedulerService {
@@ -52,8 +43,7 @@ public class ResourceSchedulerService {
                     "coach:" + r.getCoach_id(),
                     r.getEquipment_id() != null ? String.valueOf(r.getEquipment_id()) : null,
                     toMinutes(r.getStart_time()),
-                    toMinutes(r.getEnd_time()),
-                    r.getPrice()
+                    toMinutes(r.getEnd_time())
             ));
         }
 
@@ -84,7 +74,6 @@ public class ResourceSchedulerService {
         OptimizeScheduleResponse response = new OptimizeScheduleResponse();
         response.setAcceptedSessions(acceptedDtos);
         response.setRejectedSessions(rejectedDtos);
-        response.setTotalRevenue(result.totalRevenue());
         response.setRequestsConsidered(pending.size());
         response.setNodesExplored(result.nodesExplored());
         return response;

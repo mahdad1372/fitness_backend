@@ -4,55 +4,45 @@ import java.util.*;
 
 /**
  * "Studio Resource Scheduler": given a set of session requests, each tied to
- * a SPECIFIC coach and (optionally) a unit of some shared equipment type
- * with limited capacity, select the subset to accept that maximizes total
- * revenue, subject to:
+ * a SPECIFIC coach (every student has exactly one active coach - a flat
+ * monthly subscription, not a per-session fee) and (optionally) a unit of
+ * some shared equipment type with limited capacity, select the subset to
+ * accept that maximizes the NUMBER of sessions accepted, subject to:
  *   - no coach double-booked (capacity 1 per coach, since it's a specific person)
  *   - no equipment type double-booked beyond its unit count at any instant
  *
- * Why this is NP-hard (unlike everything else in this project so far):
- * with only ONE shared resource (e.g. just coaches), conflicts between
- * requests form an INTERVAL GRAPH, and max-weight independent set on an
- * interval graph is solvable in O(n log n) - that's exactly the weighted
- * interval scheduling DP already used elsewhere in this app. But once a
- * second, independently-shared resource (equipment) is added, two requests
- * with DIFFERENT coaches can still conflict (if they want the same scarce
- * equipment at overlapping times). That breaks the interval-graph structure
- * that made the single-resource version easy: the conflict graph is now a
- * general graph, and max-weight independent set on a general graph is
- * NP-hard. So this problem is at least as hard as general independent set -
- * there's no known polynomial (or even pseudo-polynomial) exact algorithm.
+ * Why this is still NP-hard even without per-session pricing: with only ONE
+ * shared resource (e.g. just coaches), conflicts between requests form an
+ * INTERVAL GRAPH, and max independent set on an interval graph is solvable
+ * in O(n log n). But once a second, independently-shared resource
+ * (equipment) is added, two requests with DIFFERENT coaches can still
+ * conflict (if they want the same scarce equipment at overlapping times).
+ * That breaks the interval-graph structure: the conflict graph is now a
+ * general graph, and max independent set on a general graph - even the
+ * UNWEIGHTED version, which is what this is now - is NP-hard. So dropping
+ * per-session pricing didn't make the underlying search any easier.
  *
- * The approach here is exact Branch & Bound: a 0/1 decision (accept/reject)
- * per request, pruned with a simple admissible upper bound (sum of all
- * remaining requests' prices, which can only overestimate what's truly
- * achievable since it ignores conflicts). It's still worst-case exponential
- * - unlike the DP-based algorithms elsewhere in this app, this one has no
- * polynomial-time guarantee - but the pruning makes it fast in practice at
- * realistic gym-schedule sizes, which is verified empirically below rather
- * than proven asymptotically.
+ * The approach is exact Branch & Bound: a 0/1 decision (accept/reject) per
+ * request, pruned with an admissible upper bound (current accepted count +
+ * however many requests are still undecided, which can only overestimate
+ * what's truly achievable since it ignores conflicts).
  */
 public class ResourceScheduler {
 
     public record SessionRequest(
             int id, String studentName, String coachName, String equipmentType,
-            int start, int end, double price
+            int start, int end
     ) {}
 
-    public record ScheduleResult(List<SessionRequest> accepted, List<SessionRequest> rejected, double totalRevenue, long nodesExplored) {}
+    public record ScheduleResult(List<SessionRequest> accepted, List<SessionRequest> rejected, long nodesExplored) {}
 
     public static ScheduleResult solve(List<SessionRequest> requests, Map<String, Integer> equipmentCapacities) {
         int n = requests.size();
         List<SessionRequest> sorted = new ArrayList<>(requests);
         sorted.sort(Comparator.comparingInt(SessionRequest::start));
 
-        double[] suffixPriceSum = new double[n + 1];
-        for (int i = n - 1; i >= 0; i--) {
-            suffixPriceSum[i] = suffixPriceSum[i + 1] + sorted.get(i).price();
-        }
-
-        BranchAndBound bb = new BranchAndBound(sorted, equipmentCapacities, suffixPriceSum);
-        bb.search(0, new HashMap<>(), new HashMap<>(), 0.0, new ArrayDeque<>());
+        BranchAndBound bb = new BranchAndBound(sorted, equipmentCapacities);
+        bb.search(0, new HashMap<>(), new HashMap<>(), 0, new ArrayDeque<>());
 
         Set<Integer> acceptedIds = new HashSet<>(bb.bestAcceptedIds);
         List<SessionRequest> accepted = new ArrayList<>();
@@ -61,38 +51,38 @@ public class ResourceScheduler {
             (acceptedIds.contains(r.id()) ? accepted : rejected).add(r);
         }
         accepted.sort(Comparator.comparingInt(SessionRequest::start));
-        return new ScheduleResult(accepted, rejected, bb.bestValue, bb.nodesExplored);
+        return new ScheduleResult(accepted, rejected, bb.nodesExplored);
     }
 
     private static class BranchAndBound {
         final List<SessionRequest> requests;
         final Map<String, Integer> equipmentCapacities;
-        final double[] suffixPriceSum;
+        final int n;
 
-        double bestValue = 0.0;
+        int bestCount = 0;
         List<Integer> bestAcceptedIds = new ArrayList<>();
         long nodesExplored = 0;
 
-        BranchAndBound(List<SessionRequest> requests, Map<String, Integer> equipmentCapacities, double[] suffixPriceSum) {
+        BranchAndBound(List<SessionRequest> requests, Map<String, Integer> equipmentCapacities) {
             this.requests = requests;
             this.equipmentCapacities = equipmentCapacities;
-            this.suffixPriceSum = suffixPriceSum;
+            this.n = requests.size();
         }
 
         void search(int index, Map<String, Integer> coachEndTimes, Map<String, PriorityQueue<Integer>> equipmentEndTimes,
-                    double currentValue, Deque<Integer> currentAcceptedIds) {
+                    int currentCount, Deque<Integer> currentAcceptedIds) {
             nodesExplored++;
 
-            if (index == requests.size()) {
-                if (currentValue > bestValue) {
-                    bestValue = currentValue;
+            if (index == n) {
+                if (currentCount > bestCount) {
+                    bestCount = currentCount;
                     bestAcceptedIds = new ArrayList<>(currentAcceptedIds);
                 }
                 return;
             }
 
-            if (currentValue + suffixPriceSum[index] <= bestValue) {
-                return; // admissible bound says we can't beat the best found - prune
+            if (currentCount + (n - index) <= bestCount) {
+                return; // can't possibly beat the best found - prune
             }
 
             SessionRequest r = requests.get(index);
@@ -121,7 +111,7 @@ public class ResourceScheduler {
                 }
 
                 currentAcceptedIds.addLast(r.id());
-                search(index + 1, coachEndTimes, equipmentEndTimes, currentValue + r.price(), currentAcceptedIds);
+                search(index + 1, coachEndTimes, equipmentEndTimes, currentCount + 1, currentAcceptedIds);
                 currentAcceptedIds.removeLast();
 
                 if (r.equipmentType() != null) {
@@ -133,7 +123,7 @@ public class ResourceScheduler {
                 else coachEndTimes.put(r.coachName(), prevCoachEnd);
             }
 
-            search(index + 1, coachEndTimes, equipmentEndTimes, currentValue, currentAcceptedIds);
+            search(index + 1, coachEndTimes, equipmentEndTimes, currentCount, currentAcceptedIds);
         }
     }
 }

@@ -20,6 +20,16 @@ public interface EquipmentQueueRepository extends CrudRepository<EquipmentQueue,
     )
     List<EquipmentQueue> findByEquipmentIdOrderByQueueIdAsc(Integer equipmentId);
 
+    // Everything, for every equipment type, in ONE query - used by status()
+    // to build the whole board without querying per equipment item. Ordered
+    // by equipment_id then queue_id so each equipment's own slice of the
+    // list is still in correct FIFO order once grouped in memory.
+    @Query(
+            value = "SELECT * FROM equipment_queue ORDER BY equipment_id ASC, queue_id ASC",
+            nativeQuery = true
+    )
+    List<EquipmentQueue> findAllOrderByEquipmentIdAscQueueIdAsc();
+
     @Query(
             value = "SELECT * FROM equipment_queue WHERE equipment_id = ?1 AND user_id = ?2",
             nativeQuery = true

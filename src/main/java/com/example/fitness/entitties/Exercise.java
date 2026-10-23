@@ -22,6 +22,17 @@ public class Exercise {
     @Column(nullable = false)
     private Integer difficulty_level; // 1 (easiest) .. 10 (hardest)
     private Integer duration_minutes;
+
+    // How many sets of this exercise a student should do in one session.
+    private Integer sets;
+
+    // Rate of Perceived Exertion (1 = very easy .. 10 = max effort) - how
+    // hard this exercise should feel. Seeded from difficulty_level when the
+    // column was added, but kept separate since "how hard the catalog ranks
+    // this exercise" and "how hard it should feel to the person doing it"
+    // may need to diverge later (e.g. hand-tuned per exercise).
+    private Integer rpe;
+
     public Integer getExercise_id() {
         return exercise_id;
     }
@@ -67,5 +78,21 @@ public class Exercise {
 
     public void setDuration_minutes(Integer duration_minutes) {
         this.duration_minutes = duration_minutes;
+    }
+
+    public Integer getSets() {
+        return sets;
+    }
+
+    public void setSets(Integer sets) {
+        this.sets = sets;
+    }
+
+    public Integer getRpe() {
+        return rpe;
+    }
+
+    public void setRpe(Integer rpe) {
+        this.rpe = rpe;
     }
 }

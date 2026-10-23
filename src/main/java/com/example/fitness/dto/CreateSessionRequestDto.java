@@ -3,21 +3,19 @@ package com.example.fitness.dto;
 import java.util.Date;
 
 // What a student submits to book a session - sits as PENDING until a coach
-// or admin runs the optimizer (POST /api/resource-scheduler/optimize).
+// or admin runs the optimizer. No coachId and no price here anymore: the
+// coach is always this student's one active coach (billed as a flat
+// monthly fee, not per session) and is filled in server-side by
+// SessionRequestService.create() from User.coachId.
 public class CreateSessionRequestDto {
 
     private Integer studentId;
-    private Integer coachId;
     private Integer equipmentId;   // nullable - omit if no shared equipment is needed
     private Date startTime;
     private Date endTime;
-    private Float price;
 
     public Integer getStudentId() { return studentId; }
     public void setStudentId(Integer studentId) { this.studentId = studentId; }
-
-    public Integer getCoachId() { return coachId; }
-    public void setCoachId(Integer coachId) { this.coachId = coachId; }
 
     public Integer getEquipmentId() { return equipmentId; }
     public void setEquipmentId(Integer equipmentId) { this.equipmentId = equipmentId; }
@@ -27,7 +25,4 @@ public class CreateSessionRequestDto {
 
     public Date getEndTime() { return endTime; }
     public void setEndTime(Date endTime) { this.endTime = endTime; }
-
-    public Float getPrice() { return price; }
-    public void setPrice(Float price) { this.price = price; }
 }

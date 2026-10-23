@@ -1,6 +1,5 @@
 package com.example.fitness.controllers;
 
-import com.example.fitness.dto.CoachSummaryDto;
 import com.example.fitness.dto.CreateSessionRequestDto;
 import com.example.fitness.dto.SessionRequestDto;
 import com.example.fitness.services.SessionRequestService;
@@ -40,11 +39,5 @@ public class SessionRequestController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<SessionRequestDto>> byStudent(@PathVariable("studentId") Integer studentId) {
         return ResponseEntity.ok(sessionRequestService.listByStudent(studentId));
-    }
-
-    @GetMapping("/coaches")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<CoachSummaryDto>> coaches() {
-        return ResponseEntity.ok(sessionRequestService.listCoaches());
     }
 }

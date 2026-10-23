@@ -51,6 +51,18 @@ public class User implements UserDetails {
     private Integer isDiabetic = 0;
     @Column(name = "on_bp_medication", nullable = false)
     private Integer onBpMedication = 0;
+
+    // NOTE: coach assignment is NOT stored on User. This app already has a
+    // Cart table (cart_item = "PRIVATE COACH", coach_id, price, user_id)
+    // that the sidebar and Chat feature use as the source of truth for
+    // "which coach does this student have". CoachSubscriptionService reads
+    // that table directly instead of duplicating it here - see that class
+    // for why, and why that matters for this Entity in particular: Spring
+    // Data's generic userRepository.findById(...) issues a SELECT that
+    // lists every @Column on this class by name, so an extra column here
+    // that isn't actually in the real USERS table breaks EVERY findById
+    // call with ORA-00904, not just the one feature that added it.
+
     public String getHeartRateDataSource() {
         return heart_Rate_Data_Source;
     }
@@ -180,4 +192,3 @@ public class User implements UserDetails {
         this.onBpMedication = onBpMedication;
     }
 }
-

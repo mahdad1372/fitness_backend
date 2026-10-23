@@ -1,5 +1,7 @@
 package com.example.fitness.dto;
 
+import java.util.Date;
+
 public class PlannedExercise {
 
     private Integer exerciseId;
@@ -7,14 +9,28 @@ public class PlannedExercise {
     private String muscleGroup;
     private Integer durationMinutes;
     private Integer value;
-
-    // True when this slot wasn't the exercise the progression chain actually
-    // called for - it was blocked by missing equipment and swapped in via
-    // the same BFS substitute search Find Substitute uses.
     private boolean substituted;
     private Integer originalExerciseId;
     private String originalName;
+    private Date startTime;
+    private Date endTime;
+    private String equipmentName;
+    private String schedulingNote;
+    private Integer itemId;
+    private boolean completed;
+    private Integer sets;
+    private Integer rpe;
 
+    public Integer getSets() { return sets; }
+    public void setSets(Integer sets) { this.sets = sets; }
+
+    public Integer getRpe() { return rpe; }
+    public void setRpe(Integer rpe) { this.rpe = rpe; }
+    public Integer getItemId() { return itemId; }
+    public void setItemId(Integer itemId) { this.itemId = itemId; }
+
+    public boolean isCompleted() { return completed; }
+    public void setCompleted(boolean completed) { this.completed = completed; }
     public Integer getExerciseId() { return exerciseId; }
     public void setExerciseId(Integer exerciseId) { this.exerciseId = exerciseId; }
 
@@ -38,4 +54,16 @@ public class PlannedExercise {
 
     public String getOriginalName() { return originalName; }
     public void setOriginalName(String originalName) { this.originalName = originalName; }
+
+    public Date getStartTime() { return startTime; }
+    public void setStartTime(Date startTime) { this.startTime = startTime; }
+
+    public Date getEndTime() { return endTime; }
+    public void setEndTime(Date endTime) { this.endTime = endTime; }
+
+    public String getEquipmentName() { return equipmentName; }
+    public void setEquipmentName(String equipmentName) { this.equipmentName = equipmentName; }
+
+    public String getSchedulingNote() { return schedulingNote; }
+    public void setSchedulingNote(String schedulingNote) { this.schedulingNote = schedulingNote; }
 }

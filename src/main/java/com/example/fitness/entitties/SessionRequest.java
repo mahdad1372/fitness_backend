@@ -6,18 +6,12 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.util.Date;
 
-/**
- * A student's request for a coaching session at a specific time, tied to a
- * specific coach and (optionally) one unit of a shared equipment type.
- * Starts life as PENDING; the ResourceSchedulerService flips a batch of
- * these to ACCEPTED/REJECTED all at once when a coach/admin runs the
- * optimizer (see ResourceScheduler's Branch & Bound in the graph package).
- */
+
 @Table(name = "session_requests")
 @Entity
 public class SessionRequest {
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(nullable = false)
     private Integer request_id;
 
@@ -41,9 +35,6 @@ public class SessionRequest {
     @Temporal(TemporalType.TIMESTAMP)
     @Column(nullable = false)
     private Date end_time;
-
-    @Column(nullable = false)
-    private Float price;
 
     // PENDING | ACCEPTED | REJECTED
     @Column(nullable = false)
@@ -101,12 +92,6 @@ public class SessionRequest {
     }
     public void setEnd_time(Date end_time) {
         this.end_time = end_time;
-    }
-    public Float getPrice() {
-        return price;
-    }
-    public void setPrice(Float price) {
-        this.price = price;
     }
     public String getStatus() {
         return status;

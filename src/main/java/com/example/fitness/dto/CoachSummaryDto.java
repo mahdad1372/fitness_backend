@@ -1,7 +1,9 @@
 package com.example.fitness.dto;
 
-// Minimal shape for populating a "pick a coach" dropdown when a student
-// submits a session request - deliberately not the full User object.
+// Shape for browsing available coaches when a student is choosing/changing
+// their ONE active coach. There is no fixed price catalog yet (coaches are
+// priced per Cart row at subscribe time), so this is deliberately just the
+// identity - not the full User object.
 public class CoachSummaryDto {
 
     private Integer coachId;

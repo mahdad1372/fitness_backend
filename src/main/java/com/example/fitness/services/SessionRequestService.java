@@ -1,11 +1,9 @@
 package com.example.fitness.services;
 
-import com.example.fitness.dto.CoachSummaryDto;
 import com.example.fitness.dto.CreateSessionRequestDto;
 import com.example.fitness.dto.SessionRequestDto;
 import com.example.fitness.entitties.Equipment;
 import com.example.fitness.entitties.SessionRequest;
-import com.example.fitness.entitties.User;
 import com.example.fitness.repositories.EquipmentRepository;
 import com.example.fitness.repositories.SessionRequestRepository;
 import com.example.fitness.repositories.UserRepository;
@@ -24,6 +22,10 @@ public class SessionRequestService {
     private final SessionRequestRepository sessionRequestRepository;
     private final UserRepository userRepository;
     private final EquipmentRepository equipmentRepository;
+    // Looks the student's one active coach up via the existing Cart table
+    // (cart_item = "PRIVATE COACH") - see that service for why this isn't
+    // a field on User.
+    private final CoachSubscriptionService coachSubscriptionService;
     // Cardiovascular Risk -> Trainer & Equipment Scheduler: this student's
     // current risk category caps how long a NEW session request is allowed
     // to run, BEFORE it's ever persisted as PENDING. The Branch & Bound
@@ -34,13 +36,17 @@ public class SessionRequestService {
     private final CardiovascularRiskService cardiovascularRiskService;
 
     public SessionRequestDto create(CreateSessionRequestDto request) {
-        User coach = userRepository.findById(request.getCoachId())
-                .orElseThrow(() -> new RuntimeException("Coach not found"));
-        if (!"COACH".equalsIgnoreCase(coach.getRole())) {
-            throw new RuntimeException("Requested coachId does not belong to a COACH-role user");
+        if (userRepository.findByUser_id(request.getStudentId()).isEmpty()) {
+            throw new RuntimeException("Student not found");
         }
-        userRepository.findById(request.getStudentId())
-                .orElseThrow(() -> new RuntimeException("Student not found"));
+        // No more "pick a coach per session" - every student has exactly
+        // one active coach (a flat monthly subscription, see
+        // CoachSubscriptionService), and that's who every one of their
+        // bookings automatically goes to.
+        Integer coachId = coachSubscriptionService.getAssignedCoachId(request.getStudentId());
+        if (coachId == null) {
+            throw new RuntimeException("You need to subscribe to a coach before booking a session.");
+        }
         if (request.getEquipmentId() != null) {
             equipmentRepository.findById(request.getEquipmentId())
                     .orElseThrow(() -> new RuntimeException("Equipment not found"));
@@ -64,11 +70,10 @@ public class SessionRequestService {
 
         SessionRequest entity = new SessionRequest();
         entity.setStudent_id(request.getStudentId());
-        entity.setCoach_id(request.getCoachId());
+        entity.setCoach_id(coachId);
         entity.setEquipment_id(request.getEquipmentId());
         entity.setStart_time(startTime);
         entity.setEnd_time(endTime);
-        entity.setPrice(request.getPrice());
         entity.setStatus("PENDING");
         entity.setCappedForRisk(cappedForRisk ? 1 : 0);
         sessionRequestRepository.save(entity);
@@ -93,17 +98,6 @@ public class SessionRequestService {
                 .collect(Collectors.toList());
     }
 
-    public List<CoachSummaryDto> listCoaches() {
-        return userRepository.findByRole("COACH").stream()
-                .map(u -> {
-                    CoachSummaryDto dto = new CoachSummaryDto();
-                    dto.setCoachId(u.getUser_id());
-                    dto.setName(u.getFirstname() + " " + u.getLastname());
-                    return dto;
-                })
-                .collect(Collectors.toList());
-    }
-
     // Resolves student/coach/equipment names for display - kept here rather
     // than in ResourceSchedulerService since both need it (before AND after
     // optimizing, the frontend shows the same shape).
@@ -115,13 +109,12 @@ public class SessionRequestService {
         dto.setEquipmentId(entity.getEquipment_id());
         dto.setStartTime(entity.getStart_time());
         dto.setEndTime(entity.getEnd_time());
-        dto.setPrice(entity.getPrice());
         dto.setStatus(entity.getStatus());
         dto.setCappedForRisk(entity.getCappedForRisk() != null && entity.getCappedForRisk() == 1);
 
-        userRepository.findById(entity.getStudent_id())
+        userRepository.findByUser_id(entity.getStudent_id()).stream().findFirst()
                 .ifPresent(u -> dto.setStudentName(u.getFirstname() + " " + u.getLastname()));
-        userRepository.findById(entity.getCoach_id())
+        userRepository.findByUser_id(entity.getCoach_id()).stream().findFirst()
                 .ifPresent(u -> dto.setCoachName(u.getFirstname() + " " + u.getLastname()));
         if (entity.getEquipment_id() != null) {
             Optional<Equipment> equipment = equipmentRepository.findById(entity.getEquipment_id());

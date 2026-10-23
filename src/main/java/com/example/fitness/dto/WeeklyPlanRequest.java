@@ -1,27 +1,19 @@
 package com.example.fitness.dto;
 
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Set;
 
 public class WeeklyPlanRequest {
 
-    // Keys are day names ("MONDAY".."SUNDAY"), values are minutes available
-    // that day (0 = rest day). A LinkedHashMap here matters: Jackson
-    // deserializes a JSON object into a LinkedHashMap by default, which
-    // preserves the key order exactly as the frontend sent it - so as long
-    // as the frontend sends Monday first through Sunday last, the planner
-    // processes the week in the right order without needing a separate
-    // day-of-week sort here.
     private LinkedHashMap<String, Integer> dailyBudgetMinutes;
 
     private Set<String> muscleGroups;
-
-    // Equipment the user HAS available (opposite framing from Find
-    // Substitute's "unavailableEquipment" - here it's simpler to say what
-    // you've got, since the planner is drawing from many muscle groups at
-    // once rather than excluding equipment for one specific exercise).
+    @Deprecated
     private Set<String> availableEquipment;
 
+    private LocalDate weekStartDate;
+    private Integer studentId;
     public LinkedHashMap<String, Integer> getDailyBudgetMinutes() {
         return dailyBudgetMinutes;
     }
@@ -29,7 +21,8 @@ public class WeeklyPlanRequest {
     public void setDailyBudgetMinutes(LinkedHashMap<String, Integer> dailyBudgetMinutes) {
         this.dailyBudgetMinutes = dailyBudgetMinutes;
     }
-
+    public Integer getStudentId() { return studentId; }
+    public void setStudentId(Integer studentId) { this.studentId = studentId; }
     public Set<String> getMuscleGroups() {
         return muscleGroups;
     }
@@ -38,11 +31,21 @@ public class WeeklyPlanRequest {
         this.muscleGroups = muscleGroups;
     }
 
+    @Deprecated
     public Set<String> getAvailableEquipment() {
         return availableEquipment;
     }
 
+    @Deprecated
     public void setAvailableEquipment(Set<String> availableEquipment) {
         this.availableEquipment = availableEquipment;
+    }
+
+    public LocalDate getWeekStartDate() {
+        return weekStartDate;
+    }
+
+    public void setWeekStartDate(LocalDate weekStartDate) {
+        this.weekStartDate = weekStartDate;
     }
 }

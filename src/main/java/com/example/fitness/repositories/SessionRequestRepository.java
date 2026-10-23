@@ -19,10 +19,9 @@ public interface SessionRequestRepository extends CrudRepository<SessionRequest,
     @Query(value = "SELECT * FROM session_requests a WHERE a.student_id = ?1", nativeQuery = true)
     List<SessionRequest> findByStudent_id(Integer studentId);
 
-    // Used by WeeklyPlannerService to find this student's next booked
-    // coaching session (if the Trainer & Equipment Scheduler has accepted
-    // one) - ordered soonest-first so the caller can just take the first
-    // one that's still in the future.
     @Query(value = "SELECT * FROM session_requests a WHERE a.student_id = ?1 AND a.status = ?2 ORDER BY a.start_time ASC", nativeQuery = true)
     List<SessionRequest> findByStudent_idAndStatusOrderByStart_timeAsc(Integer studentId, String status);
+
+    @Query(value = "SELECT * FROM session_requests a WHERE a.equipment_id = ?1 AND a.status = ?2", nativeQuery = true)
+    List<SessionRequest> findByEquipment_idAndStatus(Integer equipmentId, String status);
 }

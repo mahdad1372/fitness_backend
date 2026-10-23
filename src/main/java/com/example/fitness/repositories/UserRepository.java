@@ -27,7 +27,7 @@ public interface UserRepository extends CrudRepository<User, Integer> {
                             "values (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
             nativeQuery = true)
     void addUser(String email,String firstname,String gender,Float height
-    ,String lastname,String password,Float weight,String role,Integer age,Integer smoke);
+            ,String lastname,String password,Float weight,String role,Integer age,Integer smoke);
     @Modifying
     @Transactional
     @Query(value = "UPDATE Users SET blood_pressure_data_source = ?2 WHERE user_id = ?1", nativeQuery = true)

@@ -4,6 +4,7 @@ import com.example.fitness.dto.EquipmentQueueEntryDto;
 import com.example.fitness.dto.EquipmentStatusDto;
 import com.example.fitness.entitties.Equipment;
 import com.example.fitness.entitties.EquipmentQueue;
+import com.example.fitness.entitties.EquipmentUsage;
 import com.example.fitness.entitties.User;
 import com.example.fitness.repositories.EquipmentQueueRepository;
 import com.example.fitness.repositories.EquipmentRepository;
@@ -14,6 +15,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -39,9 +41,27 @@ public class EquipmentUsageService {
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
+    // Builds the whole board in 3 queries total (all equipment, all usage
+    // rows, all queue rows), instead of the old approach of querying usage +
+    // queue 4 separate times PER equipment item (4N+1 queries for a board of
+    // N machines - the thing that was making this endpoint take minutes).
+    // The usage/queue rows are grouped by equipment_id in memory afterward.
     public List<EquipmentStatusDto> status(Integer requestingUserId) {
-        return StreamSupport.stream(equipmentRepository.findAll().spliterator(), false)
-                .map(equipment -> toStatusDto(equipment, requestingUserId))
+        List<Equipment> allEquipment = StreamSupport
+                .stream(equipmentRepository.findAll().spliterator(), false)
+                .collect(Collectors.toList());
+
+        Map<Integer, List<EquipmentUsage>> usageByEquipment = StreamSupport
+                .stream(equipmentUsageRepository.findAll().spliterator(), false)
+                .collect(Collectors.groupingBy(EquipmentUsage::getEquipment_id));
+
+        Map<Integer, List<EquipmentQueue>> queueByEquipment = equipmentQueueRepository
+                .findAllOrderByEquipmentIdAscQueueIdAsc()
+                .stream()
+                .collect(Collectors.groupingBy(EquipmentQueue::getEquipment_id));
+
+        return allEquipment.stream()
+                .map(equipment -> toStatusDto(equipment, requestingUserId, usageByEquipment, queueByEquipment))
                 .collect(Collectors.toList());
     }
 
@@ -138,22 +158,28 @@ public class EquipmentUsageService {
         return count == null ? 0 : count;
     }
 
-    private EquipmentStatusDto toStatusDto(Equipment equipment, Integer requestingUserId) {
+    private EquipmentStatusDto toStatusDto(
+            Equipment equipment,
+            Integer requestingUserId,
+            Map<Integer, List<EquipmentUsage>> usageByEquipment,
+            Map<Integer, List<EquipmentQueue>> queueByEquipment
+    ) {
         EquipmentStatusDto dto = new EquipmentStatusDto();
         Integer equipmentId = equipment.getEquipment_id();
-        int inUse = countInUse(equipmentId);
-        Integer queueCount = equipmentQueueRepository.countByEquipmentId(equipmentId);
+
+        List<EquipmentUsage> usage = usageByEquipment.getOrDefault(equipmentId, List.of());
+        List<EquipmentQueue> queue = queueByEquipment.getOrDefault(equipmentId, List.of());
+
+        int inUse = usage.size();
 
         dto.setEquipmentId(equipmentId);
         dto.setName(equipment.getName());
         dto.setCapacity(equipment.getCapacity());
         dto.setInUse(inUse);
         dto.setAvailable(Math.max(0, equipment.getCapacity() - inUse));
-        dto.setQueueLength(queueCount == null ? 0 : queueCount);
-        dto.setCheckedInByMe(!equipmentUsageRepository
-                .findByEquipmentIdAndUserId(equipmentId, requestingUserId).isEmpty());
+        dto.setQueueLength(queue.size());
+        dto.setCheckedInByMe(usage.stream().anyMatch(u -> u.getUser_id().equals(requestingUserId)));
 
-        List<EquipmentQueue> queue = equipmentQueueRepository.findByEquipmentIdOrderByQueueIdAsc(equipmentId);
         for (int i = 0; i < queue.size(); i++) {
             if (queue.get(i).getUser_id().equals(requestingUserId)) {
                 dto.setMyQueuePosition(i + 1);
